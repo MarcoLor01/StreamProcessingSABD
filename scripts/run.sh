@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 
+set -euo pipefail
+
+JAR_PATH="target/my-flink-job-1.0-SNAPSHOT.jar"
+mkdir -p Results
+chmod 777 Results
+echo "Caricamento  challenger"
 docker image load -i data/gc25cdocker.tar
-
-docker compose up --build
-
-# TODO: setup Kafka (create broker)
-
-# TODO: start flink
+echo "Compose"
+docker compose up --build -d
