@@ -1,9 +1,9 @@
 package flink;
 
-import MicroChallenger.Batch;
-import MicroChallenger.BatchDeserializer;
-import MicroChallenger.BatchWithMask;
+import MicroChallenger.*;
 import flink.queries.Query1;
+import flink.queries.Query2;
+import flink.queries.Query3;
 import flink.source.MicroChallengerSource;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.serialization.SimpleStringEncoder;
@@ -29,7 +29,6 @@ public class Main {
 
         DataStream<BatchWithMask> q1Stream = Query1.apply(stream);
 
-
         // Scrittura su file
 
         // Converti Batch in stringa CSV
@@ -50,9 +49,34 @@ public class Main {
 
         csvLines.sinkTo(sink);
 
+        //Eseguiamo Query 2
+        DataStream<TileWithOutliers> q2Outlier = Query2.applyManhattanDistance(q1Stream);
 
+        // 1) Stream di chi ha outlier
+        DataStream<TileWithOutliers> haveOutliers =
+                q2Outlier
+                        .filter(t -> !t.outliers.isEmpty());
 
-        env.execute("Query 1 flink");
+        // 2) Clusterizzo solo quelli
+        DataStream<TileClusterResult> clustered =
+                Query3.apply(haveOutliers);
+
+        // 3) Risultati vuoti per chi non ha outlier
+        DataStream<TileClusterResult> emptyResults =
+                q2Outlier
+                        .filter(t -> t.outliers.isEmpty())
+                        .map(t -> new TileClusterResult(
+                                t,
+                                new double[0][],   // nessun centroide
+                                new int[0]         // nessuna size
+                        ));
+
+        // 4) Unisco tutto
+        DataStream<TileClusterResult> allResults =
+                clustered.union(emptyResults);
+
+        //TODO: chiamata a container per risultati finali
+        env.execute("Pipeline Query1,2,3");
     }
 
 }

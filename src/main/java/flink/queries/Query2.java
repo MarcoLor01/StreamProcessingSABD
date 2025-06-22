@@ -8,10 +8,12 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.KeyedStream;
 import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
 import org.apache.flink.streaming.api.windowing.windows.GlobalWindow;
-import org.apache.flink.util.Collector;
+
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
-import static flink.queries.Constants.*;
+import static flink.utilities.Constants.*;
+
 import java.io.FileWriter;
 import java.io.IOException;
 
@@ -20,11 +22,15 @@ public class Query2 {
 
     public static DataStream<TileWithOutliers> applyManhattanDistance(DataStream<BatchWithMask> input) {
         //Partizioniamo lo stream per tileId
-        KeyedStream<BatchWithMask, Integer> keyedStream = input.keyBy(batch -> batch.tileId);
+        //KeyedStream<BatchWithMask, Integer> keyedStream = input.keyBy(batch -> batch.tileId);
+        KeyedStream<BatchWithMask, Integer> keyedStream = input.keyBy(batch -> {
+            return batch.tileId;
+        });
         //Creo finestra count, di dimensione 3 (3 layer) con slide di 1
 
         return keyedStream.countWindow(WINDOW_LAYERS_NUMBER, SLIDING_BATCH)
                 .apply((WindowFunction<BatchWithMask, TileWithOutliers, Integer, GlobalWindow>) (integer, globalWindow, batches, collector) -> {
+                    System.out.println("DEBUG: Esecuzione window function - Key: " + integer);
                     List<BatchWithMask> batchList = new ArrayList<>();
                     batches.forEach(batchList::add);
 
@@ -38,15 +44,25 @@ public class Query2 {
                     BatchWithMask middleTile = batchList.get(1);
                     BatchWithMask tileAbove = batchList.get(2);
 
+                    //OK
+
                     //Eseguiamo il calcolo
                     List<PointWithDeviation> pointWithDeviations = new ArrayList<>(); //Per la classifica
                     List<Outlier> outliers = findOutliers(middleTile, tileBelow, tileAbove, pointWithDeviations);
+
+                    /*
+                    System.out.println("DEBUG - Lista degli outlier per il tileId: " + tileAbove.tileId + "del layer: " + tileAbove.layer + "\n");
+                    System.out.println("Numero di outlier: %d\n" + outliers.size());
+                    outliers.sort(Comparator.comparingInt(o -> o.y));
+                    for(Outlier outlier : outliers) {
+                        System.out.println("Coordinate: " + outlier.x + ", " + outlier.y + "valore deviazione: " + outlier.deviation);
+                    } */
 
                     printTop5Deviation(pointWithDeviations, tileAbove.batchId, tileAbove.printId, tileAbove.tileId);
 
                     TileWithOutliers result = new TileWithOutliers(tileAbove, outliers);
                     collector.collect(result);
-                });
+                }).returns(TileWithOutliers.class);
     }
 
     private static List<Outlier> findOutliers(BatchWithMask middleTile, BatchWithMask tileBelow, BatchWithMask tileAbove, List<PointWithDeviation> pointWithDeviations) {

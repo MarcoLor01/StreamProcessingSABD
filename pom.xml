@@ -42,6 +42,11 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
     <dependencies>
+        <dependency>
+            <groupId>com.github.haifengl</groupId>
+            <artifactId>smile-core</artifactId>
+            <version>2.6.0</version>
+        </dependency>
         <!-- MessagePack for Java -->
         <dependency>
             <groupId>org.msgpack</groupId>
@@ -79,5 +84,11 @@
             <artifactId>flink-connector-files</artifactId>
             <version>${flink.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.msgpack</groupId>
+            <artifactId>jackson-dataformat-msgpack</artifactId>
+            <version>0.9.0</version>
+        </dependency>
+
     </dependencies>
 </project>
