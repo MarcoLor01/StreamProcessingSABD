@@ -1,0 +1,8 @@
+package flink.queries;
+
+public class Constants {
+    public static final int SLIDING_BATCH = 1;
+    public static final int WINDOW_LAYERS_NUMBER = 3;
+    public static final int INTERNAL_NEIGHBORS_DISTANCE = 2;
+    public static final int OUTLIER_THRESHOLD = 6000;
+}
