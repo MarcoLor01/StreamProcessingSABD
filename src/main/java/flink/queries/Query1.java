@@ -4,9 +4,6 @@ import MicroChallenger.Batch;
 import MicroChallenger.BatchWithMask;
 import org.apache.flink.streaming.api.datastream.DataStream;
 
-import java.io.FileWriter;
-import java.io.IOException;
-
 public class Query1 {
     public static DataStream<BatchWithMask> apply(DataStream<Batch> input) {
         return input.map(batch -> {
@@ -29,15 +26,8 @@ public class Query1 {
                 }
             }
 
-            String line = String.format("%d,%s,%d,%d\n", batch.batchId, batch.printId, batch.tileId, saturatedCount);
-            try (FileWriter fw = new FileWriter("/opt/flink/output/query1.csv", true)) {
-                fw.write(line);
-            } catch (IOException e) {
-                // Puoi loggare o rilanciare
-                e.printStackTrace();
-            }
 
-            return new BatchWithMask(batch.batchId, batch.printId, batch.tileId, batch.layer, batch.temp, validMask);
+            return new BatchWithMask(batch.batchId, batch.printId, batch.tileId, batch.layer, batch.temp, validMask,saturatedCount);
         });
     }
 }
