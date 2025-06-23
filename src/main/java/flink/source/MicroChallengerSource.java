@@ -7,6 +7,13 @@ import java.nio.charset.StandardCharsets;
 
 
 public class MicroChallengerSource implements Source<byte[], MicroChallengerSplit, Void> {
+    private final String benchId;
+
+    public MicroChallengerSource(String benchId) {
+        this.benchId = benchId;
+
+    }
+
     @Override
     public Boundedness getBoundedness() {
         return Boundedness.BOUNDED;
@@ -16,7 +23,7 @@ public class MicroChallengerSource implements Source<byte[], MicroChallengerSpli
 
     @Override
     public SourceReader<byte[], MicroChallengerSplit> createReader(SourceReaderContext context) {
-        return new MicroChallengerReader(context);
+        return new MicroChallengerReader(context, benchId);
     }
 
     @Override

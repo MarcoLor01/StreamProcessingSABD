@@ -6,6 +6,7 @@ public class MicroChallengerSplit implements SourceSplit {
     private final String splitId;
 
     public MicroChallengerSplit(String splitId) {
+
         this.splitId = splitId;
     }
 

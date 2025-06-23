@@ -4,7 +4,6 @@ import MicroChallenger.MicroChallengerClient;
 import MicroChallenger.TileClusterResult;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.configuration.Configuration;
-import org.msgpack.core.MessagePack;
 
 public class SendResult extends RichMapFunction<TileClusterResult, Void> {
     private final int workerId;
@@ -16,7 +15,7 @@ public class SendResult extends RichMapFunction<TileClusterResult, Void> {
     }
 
     @Override
-    public void open(Configuration parameters) throws Exception {
+    public void open(Configuration parameters){
         this.client = new MicroChallengerClient();
     }
 

@@ -16,13 +16,14 @@ public class MicroChallengerEnumerator implements SplitEnumerator<MicroChallenge
 
     @Override
     public void start() {
-        // No background work needed
     }
 
     @Override
     public void handleSplitRequest(int subtaskId, @Nullable String requesterHostname) {
         if (!assigned) {
-            context.assignSplit(new MicroChallengerSplit("singleton"), subtaskId);
+            MicroChallengerSplit split = new MicroChallengerSplit("default-split");
+            context.assignSplit(split, subtaskId);
+            context.signalNoMoreSplits(subtaskId);
             assigned = true;
         }
     }
