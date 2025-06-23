@@ -81,6 +81,7 @@ public class MicroChallengerClient {
                             " -> " + new String(resp.body())
             );
         }
+
     }
 
     private String trimQuotes(String raw) {

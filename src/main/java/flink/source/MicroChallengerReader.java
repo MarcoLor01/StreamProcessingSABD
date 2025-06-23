@@ -13,21 +13,16 @@ import java.util.concurrent.CompletableFuture;
 public class MicroChallengerReader implements SourceReader<byte[], MicroChallengerSplit> {
     private final SourceReaderContext context;
     private final MicroChallengerClient client = new MicroChallengerClient();
-    private String benchId;
-    private boolean running = true;
+    private final String benchId;
     private boolean finished = false;
 
-    public MicroChallengerReader(SourceReaderContext context) {
+    public MicroChallengerReader(SourceReaderContext context,String benchId) {
         this.context = context;
+        this.benchId = benchId;
     }
 
     @Override
     public void start() {
-        try {
-            benchId = client.createAndStartBench(false, 10000); // VALORE MASSIMO DEI BATCH DA PROCESSARE
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to start benchmark", e);
-        }
     }
 
     @Override

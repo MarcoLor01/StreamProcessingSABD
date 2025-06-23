@@ -5,6 +5,7 @@ import flink.queries.Query1;
 import flink.queries.Query2;
 import flink.queries.Query3;
 import flink.source.MicroChallengerSource;
+import flink.source.SendResult;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.serialization.SimpleStringEncoder;
 import org.apache.flink.connector.file.sink.FileSink;
@@ -12,17 +13,22 @@ import org.apache.flink.core.fs.Path;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.DefaultRollingPolicy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 
 public class Main {
+    private static final Logger LOG = LoggerFactory.getLogger(Main.class);
     public static void main(String[] args) throws Exception {
+        MicroChallengerClient client = new MicroChallengerClient();
+        String benchId = client.createAndStartBench(false, 10000);
         // Crea il Flink StreamEnvironment
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
         // Aggiungi la sorgente custom
         DataStream<Batch> stream = env.fromSource(
-                new MicroChallengerSource(),
+                new MicroChallengerSource(benchId),
                 WatermarkStrategy.forMonotonousTimestamps(),
                 "MicroChallengerSource"
         ).map(new BatchDeserializer());
@@ -75,8 +81,11 @@ public class Main {
         DataStream<TileClusterResult> allResults =
                 clustered.union(emptyResults);
 
+        allResults.map(new SendResult(0, benchId)).name("ResultMapper");
+
         //TODO: chiamata a container per risultati finali
         env.execute("Pipeline Query1,2,3");
+
     }
 
 }
