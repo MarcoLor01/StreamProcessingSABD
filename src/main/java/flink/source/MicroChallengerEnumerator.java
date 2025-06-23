@@ -16,7 +16,6 @@ public class MicroChallengerEnumerator implements SplitEnumerator<MicroChallenge
 
     @Override
     public void start() {
-        // No background work needed
     }
 
     @Override

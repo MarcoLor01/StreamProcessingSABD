@@ -11,6 +11,7 @@ public class MicroChallengerSource implements Source<byte[], MicroChallengerSpli
 
     public MicroChallengerSource(String benchId) {
         this.benchId = benchId;
+
     }
 
     @Override

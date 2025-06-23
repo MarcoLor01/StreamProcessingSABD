@@ -23,6 +23,7 @@ public class MicroChallengerReader implements SourceReader<byte[], MicroChalleng
 
     @Override
     public void start() {
+
     }
 
     @Override
