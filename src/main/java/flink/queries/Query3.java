@@ -1,5 +1,6 @@
 package flink.queries;
 
+import MicroChallenger.Centroid;
 import MicroChallenger.Outlier;
 import MicroChallenger.TileClusterResult;
 import MicroChallenger.TileWithOutliers;
@@ -7,6 +8,7 @@ import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import smile.clustering.DBSCAN;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static flink.utilities.Constants.DBSCAN_MIN_PTS;
@@ -27,7 +29,8 @@ public class Query3 {
             List<Outlier> outliers = tileWithOutliers.outliers;
 
             if (outliers.isEmpty()) {
-                new TileClusterResult(tileWithOutliers, new double[0][], new int[0]);
+                return new TileClusterResult(tileWithOutliers.batchId, tileWithOutliers.printId, tileWithOutliers.tileId,
+                        tileWithOutliers.saturated, new ArrayList<>());
             }
 
             //DBSCAN
@@ -45,7 +48,6 @@ public class Query3 {
             double[][] centroids = new double[numClusters][data[0].length];
             int[] clusterSizes = new int[numClusters];
 
-            // 2. Iterazione più efficiente
             for (int i = 0; i < labels.length; i++) {
                 int label = labels[i];
                 if (label >= 0 && label < numClusters) {
@@ -57,27 +59,31 @@ public class Query3 {
                 }
             }
 
-            // 3. Calcola i centroidi finali
+            List<Centroid> centroidList = new ArrayList<>();
+            // Calcolo dei centroidi finali
             for (int c = 0; c < numClusters; c++) {
                 if (clusterSizes[c] > 0) {
                     for (int j = 0; j < centroids[c].length; j++) {
                         centroids[c][j] /= clusterSizes[c];
                     }
+
+                    double cx = centroids[c][0];
+                    double cy = centroids[c][1];
+                    int sz = clusterSizes[c];
+
+                    centroidList.add(new Centroid(cx, cy, sz));
+                    /*
+                    System.out.printf(
+                            "DEBUG - centroid %d: x=%.2f, y=%.2f, size=%d%n",
+                            c, cx, cy, sz
+                    );
+
+                     */
                 }
             }
-            System.out.println("DEBUG - tileId: " + tileWithOutliers.tileId + "  layer: " + tileWithOutliers.layer);
-            System.out.println("DEBUG - numClusters: " + numClusters);
 
-            for (int c = 0; c < numClusters; c++) {
-                double cx = centroids[c][0];
-                double cy = centroids[c][1];
-                int sz = clusterSizes[c];
-                System.out.println(String.format(
-                        "DEBUG - centroid %d: x=%.2f, y=%.2f, size=%d",
-                        c, cx, cy, sz
-                ));
-            }
-            return new TileClusterResult(tileWithOutliers, centroids, clusterSizes);
+            return new TileClusterResult(tileWithOutliers.batchId, tileWithOutliers.printId, tileWithOutliers.tileId,
+                    tileWithOutliers.saturated, centroidList);
         }
     }
 }

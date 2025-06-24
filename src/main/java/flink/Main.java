@@ -4,6 +4,7 @@ import MicroChallenger.*;
 import flink.queries.Query1;
 import flink.queries.Query2;
 import flink.queries.Query3;
+import flink.source.EndBenchSink;
 import flink.source.MicroChallengerSource;
 import flink.source.SendResult;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
@@ -20,6 +21,7 @@ import java.time.Duration;
 
 public class Main {
     private static final Logger LOG = LoggerFactory.getLogger(Main.class);
+
     public static void main(String[] args) throws Exception {
 
         MicroChallengerClient client = new MicroChallengerClient();
@@ -59,34 +61,41 @@ public class Main {
         //Eseguiamo Query 2
         DataStream<TileWithOutliers> q2Outlier = Query2.applyManhattanDistance(q1Stream);
 
-        // 1) Stream di chi ha outlier
-        DataStream<TileWithOutliers> haveOutliers =
-                q2Outlier
-                        .filter(t -> !t.outliers.isEmpty());
 
-        // 2) Clusterizzo solo quelli
-        DataStream<TileClusterResult> clustered =
-                Query3.apply(haveOutliers);
+        //Eseguiamo Query 3
+        DataStream<TileClusterResult> clustered = Query3.apply(q2Outlier);
+        clustered.map(new SendResult(0, benchId)).name("ResultMapper");
 
-        // 3) Risultati vuoti per chi non ha outlier
-        DataStream<TileClusterResult> emptyResults =
-                q2Outlier
-                        .filter(t -> t.outliers.isEmpty())
-                        .map(t -> new TileClusterResult(
-                                t,
-                                new double[0][],   // nessun centroide
-                                new int[0]         // nessuna size
-                        ));
+        clustered.map(result -> {
+            StringBuilder sb = new StringBuilder();
+            sb.append("{'batch_id': ").append(result.batch_id)
+                    .append(", 'print_id': '").append(result.print_id).append("'")
+                    .append(", 'tile_id': ").append(result.tile_id)
+                    .append(", 'saturated': ").append(result.saturated)
+                    .append(", 'centroids': [");
 
-        // 4) Unisco tutto
-        DataStream<TileClusterResult> allResults =
-                clustered.union(emptyResults);
+            for (int i = 0; i < result.centroids.size(); i++) {
+                Centroid c = result.centroids.get(i);
+                if (i > 0) sb.append(", ");
+                sb.append("{'x': np.float64(").append(c.x)
+                        .append("), 'y': np.float64(").append(c.y)
+                        .append("), 'count': ").append(c.count).append("}");
+            }
 
-        allResults.map(new SendResult(0, benchId)).name("ResultMapper");
+            sb.append("]}");
+            return sb.toString();
+        }).print();
 
-        //TODO: chiamata a container per risultati finali
+        clustered
+                .addSink(new EndBenchSink(benchId))
+                .setParallelism(1);
+
         env.execute("Pipeline Query1,2,3");
 
+
     }
+
+    //String result = client.endBench(benchId);
+    //LOG.info("Final Result: {}", result);
 
 }

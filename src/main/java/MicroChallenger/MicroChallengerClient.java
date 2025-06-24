@@ -8,6 +8,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 public class MicroChallengerClient {
@@ -53,39 +54,67 @@ public class MicroChallengerClient {
         return response.body();
     }
 
-    public void sendResult(int worker, String benchId, TileClusterResult result)
+    public String sendResult(int worker, String benchId, TileClusterResult result)
             throws IOException, InterruptedException {
+            // Serializzo il risultato in MessagePack
+            byte[] body = msgpack.writeValueAsBytes(result);
 
-        // 1) serializzo il risultato in MessagePack
-        byte[] body = msgpack.writeValueAsBytes(result);
-
-        // 2) costruisco l'URL
-        String url = String.format("%s/result/%d/%s/%d",
-                BASE_URL,
-                worker,
-                Objects.requireNonNull(benchId),
-                result.batchId
-        );
-
-        HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .header("Content-Type", "application/msgpack")
-                .POST(HttpRequest.BodyPublishers.ofByteArray(body))
-                .build();
-
-        // 3) invio e controllo status
-        HttpResponse<byte[]> resp = client.send(req, HttpResponse.BodyHandlers.ofByteArray());
-        if (resp.statusCode() != 200) {
-            throw new RuntimeException(
-                    "Errore invio result: HTTP " + resp.statusCode() +
-                            " -> " + new String(resp.body())
+            // Costruisco l'URL
+            String url = String.format("%s/result/%d/%s/%d",
+                    BASE_URL,
+                    worker,
+                    Objects.requireNonNull(benchId),
+                    result.batch_id
             );
-        }
 
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Content-Type", "application/msgpack")
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(body))
+                    .build();
+
+            // 3) invio e controllo status
+            HttpResponse<byte[]> resp = client.send(req, HttpResponse.BodyHandlers.ofByteArray());
+            if (resp.statusCode() != 200) {
+                throw new RuntimeException(
+                        "Errore invio result: HTTP " + resp.statusCode() +
+                                " -> " + new String(resp.body())
+                );
+            }
+            return new String(resp.body(), StandardCharsets.UTF_8);
     }
 
     private String trimQuotes(String raw) {
         return raw.trim().replaceAll("^\"|\"$", "");
     }
+
+    public String endBench(String benchId) throws IOException, InterruptedException {
+
+        //Costruisco l'url
+        String url = String.format("%s/end/%s",
+                BASE_URL,
+                Objects.requireNonNull(benchId)
+        );
+
+        //Costruisci la request
+        HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+
+        //Esegui la chiamata
+        HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+
+        // 3) Controlla lo status
+        if (resp.statusCode() != 200) {
+            throw new RuntimeException("Errore endBench: HTTP " + resp.statusCode()
+                    + " -> " + resp.body());
+        }
+
+        // 4) Restituisci il contenuto testuale della risposta
+        return resp.body();
+    }
+
+
 }
 

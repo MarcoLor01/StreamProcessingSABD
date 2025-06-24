@@ -16,6 +16,7 @@ import static flink.utilities.Constants.*;
 
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.PriorityQueue;
 
 
 public class Query2 {
@@ -23,14 +24,12 @@ public class Query2 {
     public static DataStream<TileWithOutliers> applyManhattanDistance(DataStream<BatchWithMask> input) {
         //Partizioniamo lo stream per tileId
         //KeyedStream<BatchWithMask, Integer> keyedStream = input.keyBy(batch -> batch.tileId);
-        KeyedStream<BatchWithMask, Integer> keyedStream = input.keyBy(batch -> {
-            return batch.tileId;
-        });
+        KeyedStream<BatchWithMask, Integer> keyedStream = input.keyBy(batch -> batch.tileId);
         //Creo finestra count, di dimensione 3 (3 layer) con slide di 1
 
         return keyedStream.countWindow(WINDOW_LAYERS_NUMBER, SLIDING_BATCH)
                 .apply((WindowFunction<BatchWithMask, TileWithOutliers, Integer, GlobalWindow>) (integer, globalWindow, batches, collector) -> {
-                    System.out.println("DEBUG: Esecuzione window function - Key: " + integer);
+                    //System.out.println("DEBUG: Esecuzione window function - Key: " + integer);
                     List<BatchWithMask> batchList = new ArrayList<>();
                     batches.forEach(batchList::add);
 
@@ -47,8 +46,9 @@ public class Query2 {
                     //OK
 
                     //Eseguiamo il calcolo
-                    List<PointWithDeviation> pointWithDeviations = new ArrayList<>(); //Per la classifica
-                    List<Outlier> outliers = findOutliers(middleTile, tileBelow, tileAbove, pointWithDeviations);
+                    //Usiamo per la classifica una priority queue
+                    PriorityQueue<PointWithDeviation> top5DeviationPoints =  new PriorityQueue<>(5, Comparator.comparingDouble((PointWithDeviation point) -> point.deviation));
+                    List<Outlier> outliers = findOutliers(middleTile, tileBelow, tileAbove, top5DeviationPoints);
 
                     /*
                     System.out.println("DEBUG - Lista degli outlier per il tileId: " + tileAbove.tileId + "del layer: " + tileAbove.layer + "\n");
@@ -58,14 +58,14 @@ public class Query2 {
                         System.out.println("Coordinate: " + outlier.x + ", " + outlier.y + "valore deviazione: " + outlier.deviation);
                     } */
 
-                    printTop5Deviation(pointWithDeviations, tileAbove.batchId, tileAbove.printId, tileAbove.tileId);
+                    printTop5Deviation(top5DeviationPoints, tileAbove.batchId, tileAbove.printId, tileAbove.tileId);
 
                     TileWithOutliers result = new TileWithOutliers(tileAbove, outliers);
                     collector.collect(result);
                 }).returns(TileWithOutliers.class);
     }
 
-    private static List<Outlier> findOutliers(BatchWithMask middleTile, BatchWithMask tileBelow, BatchWithMask tileAbove, List<PointWithDeviation> pointWithDeviations) {
+    private static List<Outlier> findOutliers(BatchWithMask middleTile, BatchWithMask tileBelow, BatchWithMask tileAbove, PriorityQueue<PointWithDeviation> top5DeviationPoint) {
         List<Outlier> outliers = new ArrayList<>();
 
         int rows = tileAbove.temp.length; //Numero di righe
@@ -110,9 +110,12 @@ public class Query2 {
                 if (localTemperatureDeviation > OUTLIER_THRESHOLD) {
                     outliers.add(new Outlier(i, j, localTemperatureDeviation));
                 }
-
-                pointWithDeviations.add(new PointWithDeviation(i , j ,localTemperatureDeviation)); //Aggiungo il punto alla lista
-
+                if (top5DeviationPoint.size() < 5) {
+                    top5DeviationPoint.add(new PointWithDeviation(i, j, localTemperatureDeviation)); // Se ho meno di 5 elementi aggiungo sempre
+                } else if (localTemperatureDeviation > top5DeviationPoint.peek().deviation) { //Se rientra nei top 5 attuali
+                    top5DeviationPoint.poll(); //Tolgo il valore più basso
+                    top5DeviationPoint.add(new PointWithDeviation(i, j, localTemperatureDeviation)); //Add del punto
+                }
             }
         }
 
@@ -125,21 +128,20 @@ public class Query2 {
         } return 0; // Restituisce 0 se fuori dai bordi
     }
 
-    private static void printTop5Deviation(List<PointWithDeviation> pointsWithDeviation, int batchId, String printId, int tileId) {
-        pointsWithDeviation.sort((a, b) -> Double.compare(b.deviation, a.deviation));
-
-        // Prendi i primi 5 (o meno se non ci sono abbastanza punti)
-        List<PointWithDeviation> top5Deviation = pointsWithDeviation.subList(0, Math.min(5, pointsWithDeviation.size()));
-
+    private static void printTop5Deviation(PriorityQueue<PointWithDeviation> pointsWithDeviation, int batchId, String printId, int tileId) {
         StringBuilder output = new StringBuilder();
         output.append(batchId).append(",").append(printId).append(",").append(tileId);
 
-        for (PointWithDeviation point : top5Deviation) {
+        // Converto in lista e riordino in modo decrescente
+        List<PointWithDeviation> sortedPoints = new ArrayList<>(pointsWithDeviation);
+        sortedPoints.sort(Comparator.comparingDouble((PointWithDeviation point) -> point.deviation).reversed());
+
+        for (PointWithDeviation point : sortedPoints) {
             output.append(",\"(").append(point.x).append(",").append(point.y).append(")\"")
                     .append(",").append(point.deviation);
         }
 
-        try (FileWriter writer = new FileWriter("/opt/flink/output/query2.csv", true)) { // true per appendere
+        try (FileWriter writer = new FileWriter("/opt/flink/output/query2.csv", true)) {
             writer.write(output.toString());
             writer.write("\n");
         } catch (IOException e) {
