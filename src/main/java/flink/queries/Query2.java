@@ -4,11 +4,18 @@ import MicroChallenger.BatchWithMask;
 import MicroChallenger.Outlier;
 import MicroChallenger.PointWithDeviation;
 import MicroChallenger.TileWithOutliers;
+import flink.Main;
+import org.apache.flink.api.common.serialization.SimpleStringEncoder;
+import org.apache.flink.core.fs.Path;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.KeyedStream;
+import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.DefaultRollingPolicy;
 import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
 import org.apache.flink.streaming.api.windowing.windows.GlobalWindow;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -20,8 +27,9 @@ import java.util.PriorityQueue;
 
 
 public class Query2 {
-
+    private static final Logger LOG = LoggerFactory.getLogger(Query2.class);
     public static DataStream<TileWithOutliers> applyManhattanDistance(DataStream<BatchWithMask> input) {
+
         //Partizioniamo lo stream per tileId
         //KeyedStream<BatchWithMask, Integer> keyedStream = input.keyBy(batch -> batch.tileId);
         KeyedStream<BatchWithMask, Integer> keyedStream = input.keyBy(batch -> batch.tileId);
@@ -33,8 +41,13 @@ public class Query2 {
                     List<BatchWithMask> batchList = new ArrayList<>();
                     batches.forEach(batchList::add);
 
-                    if (batchList.size() < 3) {
-                        // Non dovrebbe servire, solo per robustezza
+                    if (batchList.size() == 1) {
+                        TileWithOutliers result = new TileWithOutliers(batchList.get(0), new ArrayList<>(), "");
+                        collector.collect(result);
+                        return;
+                    } else if (batchList.size() == 2) {
+                        TileWithOutliers result = new TileWithOutliers(batchList.get(1), new ArrayList<>(), "");
+                        collector.collect(result);
                         return;
                     }
 
@@ -50,17 +63,9 @@ public class Query2 {
                     PriorityQueue<PointWithDeviation> top5DeviationPoints =  new PriorityQueue<>(5, Comparator.comparingDouble((PointWithDeviation point) -> point.deviation));
                     List<Outlier> outliers = findOutliers(middleTile, tileBelow, tileAbove, top5DeviationPoints);
 
-                    /*
-                    System.out.println("DEBUG - Lista degli outlier per il tileId: " + tileAbove.tileId + "del layer: " + tileAbove.layer + "\n");
-                    System.out.println("Numero di outlier: %d\n" + outliers.size());
-                    outliers.sort(Comparator.comparingInt(o -> o.y));
-                    for(Outlier outlier : outliers) {
-                        System.out.println("Coordinate: " + outlier.x + ", " + outlier.y + "valore deviazione: " + outlier.deviation);
-                    } */
+                    String top5Deviation = formatTop5Deviation(top5DeviationPoints, tileAbove.batchId, tileAbove.printId, tileAbove.tileId);
 
-                    printTop5Deviation(top5DeviationPoints, tileAbove.batchId, tileAbove.printId, tileAbove.tileId);
-
-                    TileWithOutliers result = new TileWithOutliers(tileAbove, outliers);
+                    TileWithOutliers result = new TileWithOutliers(tileAbove, outliers, top5Deviation);
                     collector.collect(result);
                 }).returns(TileWithOutliers.class);
     }
@@ -128,11 +133,10 @@ public class Query2 {
         } return 0; // Restituisce 0 se fuori dai bordi
     }
 
-    private static void printTop5Deviation(PriorityQueue<PointWithDeviation> pointsWithDeviation, int batchId, String printId, int tileId) {
+    private static String formatTop5Deviation(PriorityQueue<PointWithDeviation> pointsWithDeviation, int batchId, String printId, int tileId) {
         StringBuilder output = new StringBuilder();
         output.append(batchId).append(",").append(printId).append(",").append(tileId);
 
-        // Converto in lista e riordino in modo decrescente
         List<PointWithDeviation> sortedPoints = new ArrayList<>(pointsWithDeviation);
         sortedPoints.sort(Comparator.comparingDouble((PointWithDeviation point) -> point.deviation).reversed());
 
@@ -141,12 +145,7 @@ public class Query2 {
                     .append(",").append(point.deviation);
         }
 
-        try (FileWriter writer = new FileWriter("/opt/flink/output/query2.csv", true)) {
-            writer.write(output.toString());
-            writer.write("\n");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        return output.toString();
     }
 
 }

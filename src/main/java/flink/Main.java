@@ -25,7 +25,7 @@ public class Main {
     public static void main(String[] args) throws Exception {
 
         MicroChallengerClient client = new MicroChallengerClient();
-        String benchId = client.createAndStartBench(false, 10000);
+        String benchId = client.createAndStartBench(false, 200);
         // Crea il Flink StreamEnvironment
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
@@ -61,30 +61,44 @@ public class Main {
         //Eseguiamo Query 2
         DataStream<TileWithOutliers> q2Outlier = Query2.applyManhattanDistance(q1Stream);
 
+        DataStream<String> csvLinesQ2 = q2Outlier.map(tile ->
+                String.format("%d,%s,%d,%s", tile.batchId, tile.printId, tile.tileId, tile.top5Deviation)
+        );
+
+        // Crea un sink su file
+        FileSink<String> sinkQ2 = FileSink
+                .forRowFormat(new Path("/opt/flink/output/query2"), new SimpleStringEncoder<String>("UTF-8"))
+                .withRollingPolicy(
+                        DefaultRollingPolicy.builder()
+                                .withRolloverInterval(Duration.ofMinutes(10))
+                                .withInactivityInterval(Duration.ofMinutes(5)).
+                                build()
+                )
+                .build();
+
+        csvLinesQ2.sinkTo(sinkQ2);
 
         //Eseguiamo Query 3
         DataStream<TileClusterResult> clustered = Query3.apply(q2Outlier);
         clustered.map(new SendResult(0, benchId)).name("ResultMapper");
 
-        clustered.map(result -> {
-            StringBuilder sb = new StringBuilder();
-            sb.append("{'batch_id': ").append(result.batch_id)
-                    .append(", 'print_id': '").append(result.print_id).append("'")
-                    .append(", 'tile_id': ").append(result.tile_id)
-                    .append(", 'saturated': ").append(result.saturated)
-                    .append(", 'centroids': [");
+        DataStream<String> csvLinesQ3 = clustered.map(clusteredPoint ->
+                String.format("%d,%s,%d,%d,%s", clusteredPoint.batch_id, clusteredPoint.print_id, clusteredPoint.tile_id, clusteredPoint.saturated, clusteredPoint.formatCentroids())
+        );
 
-            for (int i = 0; i < result.centroids.size(); i++) {
-                Centroid c = result.centroids.get(i);
-                if (i > 0) sb.append(", ");
-                sb.append("{'x': np.float64(").append(c.x)
-                        .append("), 'y': np.float64(").append(c.y)
-                        .append("), 'count': ").append(c.count).append("}");
-            }
+        // Crea un sink su file
+        FileSink<String> sinkQ3 = FileSink
+                .forRowFormat(new Path("/opt/flink/output/query3"), new SimpleStringEncoder<String>("UTF-8"))
+                .withRollingPolicy(
+                        DefaultRollingPolicy.builder()
+                                .withRolloverInterval(Duration.ofMinutes(10))
+                                .withInactivityInterval(Duration.ofMinutes(5)).
+                                build()
+                )
+                .build();
 
-            sb.append("]}");
-            return sb.toString();
-        }).print();
+        csvLinesQ3.sinkTo(sinkQ3);
+
 
         clustered
                 .addSink(new EndBenchSink(benchId))
