@@ -72,13 +72,6 @@ public class Query3 {
                     int sz = clusterSizes[c];
 
                     centroidList.add(new Centroid(cx, cy, sz));
-                    /*
-                    System.out.printf(
-                            "DEBUG - centroid %d: x=%.2f, y=%.2f, size=%d%n",
-                            c, cx, cy, sz
-                    );
-
-                     */
                 }
             }
 

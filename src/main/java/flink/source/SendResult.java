@@ -27,7 +27,7 @@ public class SendResult extends RichMapFunction<TileClusterResult, Void> {
     @Override
     public Void map(TileClusterResult value) throws Exception {
         String result = client.sendResult(workerId, benchId, value);
-        LOG.info("Result: {}", result);
+        LOG.info("Result of batch: {}: {}", value.batch_id, result);
         return null;
     }
 }

@@ -18,4 +18,4 @@ echo "Caricamento Jar"
 docker cp target/StreamingApplicationSABD-1.0-SNAPSHOT.jar jobmanager:/opt/flink/lib/
 docker cp target/StreamingApplicationSABD-1.0-SNAPSHOT.jar taskmanager:/opt/flink/lib/
 echo "Esecuzione job flink"
-docker exec -it jobmanager flink run -c flink.Main /opt/flink/lib/StreamingApplicationSABD-1.0-SNAPSHOT.jar
+docker exec -it jobmanager flink run -c flink.Main -p 4 /opt/flink/lib/StreamingApplicationSABD-1.0-SNAPSHOT.jar true
