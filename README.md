@@ -1,3 +1,3 @@
 # StreamProcessingSABD
 Run with
-<pre> ```bash ./scripts/run.sh ``` </pre>
+<pre>./scripts/run.sh</pre>
